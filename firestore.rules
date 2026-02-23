@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Trips collection
+    match /trips/{tripId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberUids;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.adminUid ||
+        request.auth.uid in resource.data.memberUids
+      );
+      allow delete: if request.auth != null && request.auth.uid == resource.data.adminUid;
+
+      // Expenses subcollection
+      match /expenses/{expenseId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update: if request.auth != null && (
+          request.auth.uid == resource.data.createdByUid ||
+          get(/databases/$(database)/documents/trips/$(tripId)).data.adminUid == request.auth.uid
+        );
+        allow delete: if request.auth != null && (
+          request.auth.uid == resource.data.createdByUid ||
+          get(/databases/$(database)/documents/trips/$(tripId)).data.adminUid == request.auth.uid
+        );
+      }
+
+      // Activities subcollection
+      match /activities/{activityId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+      }
+
+      // Settlements subcollection
+      match /settlements/{settlementId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+      }
+    }
+
+    // Allow reading trips by invite code (for join flow)
+    match /trips/{tripId} {
+      allow read: if request.auth != null;
+    }
+  }
+}
