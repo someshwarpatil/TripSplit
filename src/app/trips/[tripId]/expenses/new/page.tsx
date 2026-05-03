@@ -11,6 +11,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import ReceiptScanner, { ScanResult } from '@/components/trip/ReceiptScanner';
 import { addExpenseLocal, addActivityLocal } from '@/lib/firestore';
+import { reverseGeocode } from '@/lib/geocode';
 import { scheduleReceiptUpload } from '@/lib/outbox';
 import { calculateEqualSplit } from '@/utils/balance';
 import { formatCurrency } from '@/utils/format';
@@ -116,11 +117,16 @@ export default function NewExpensePage() {
     }
     setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocationCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        if (!locationName) setLocationName('Current Location');
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setLocationCoords({ lat, lng });
+        const hadName = locationName.trim().length > 0;
+        const placeName = await reverseGeocode(lat, lng);
+        if (!hadName) setLocationName(placeName ?? 'Current Location');
         setGettingLocation(false);
-        toast.success('Location captured!');
+        if (placeName || hadName) toast.success('Location captured!');
+        else toast.success('Location captured (name unavailable)');
       },
       () => {
         toast.error('Could not get location');
