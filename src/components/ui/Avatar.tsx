@@ -22,14 +22,14 @@ export default function Avatar({ name, photoURL, size = 'md', className = '' }: 
         alt={name}
         width={size === 'lg' ? 48 : size === 'md' ? 40 : 32}
         height={size === 'lg' ? 48 : size === 'md' ? 40 : 32}
-        className={`${sizeClasses[size]} rounded-full object-cover ${className}`}
+        className={`${sizeClasses[size]} rounded-full object-cover shrink-0 ${className}`}
       />
     );
   }
 
   return (
     <div
-      className={`${sizeClasses[size]} rounded-full bg-[#FFB4A2] text-[#E63946] font-semibold flex items-center justify-center ${className}`}
+      className={`${sizeClasses[size]} rounded-full bg-[var(--color-accent)] text-[var(--color-primary)] font-semibold flex items-center justify-center shrink-0 ${className}`}
     >
       {getInitials(name)}
     </div>

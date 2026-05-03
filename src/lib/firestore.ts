@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   getDoc,
@@ -16,7 +17,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db as getDb } from './firebase';
-import { Trip, Expense, Activity, Settlement } from '@/types';
+import { Trip, Expense, Activity, Settlement, Advance } from '@/types';
 
 // ── Trips ──
 
@@ -46,7 +47,7 @@ export async function getTrip(tripId: string): Promise<Trip | null> {
 
 export async function updateTrip(
   tripId: string,
-  data: Partial<Pick<Trip, 'name' | 'destination' | 'startDate' | 'endDate'>>
+  data: Partial<Pick<Trip, 'name' | 'destination' | 'startDate' | 'endDate' | 'coverImageUrl'>>
 ) {
   await updateDoc(doc(getDb(),'trips', tripId), data);
 }
@@ -208,6 +209,32 @@ export function subscribeToSettlements(
   });
 }
 
+// ── Advances ──
+
+export async function addAdvance(
+  tripId: string,
+  data: Omit<Advance, 'id' | 'createdAt'>
+): Promise<string> {
+  const docRef = await addDoc(collection(getDb(), 'trips', tripId, 'advances'), {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+export function subscribeToAdvances(
+  tripId: string,
+  callback: (advances: Advance[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(getDb(), 'trips', tripId, 'advances'),
+    orderBy('createdAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Advance)));
+  });
+}
+
 // ── Users ──
 
 export async function getUserDoc(uid: string) {
@@ -218,6 +245,7 @@ export async function getUserDoc(uid: string) {
     displayName: string;
     email: string;
     photoURL: string | null;
+    upiId?: string;
   };
 }
 
@@ -228,7 +256,103 @@ export async function getUserDocs(uids: string[]) {
     displayName: string;
     email: string;
     photoURL: string | null;
+    upiId?: string;
   }[];
+}
+
+export async function updateUserDoc(uid: string, data: { upiId?: string }) {
+  await updateDoc(doc(getDb(),'users', uid), data);
+}
+
+// ── FCM tokens ──
+// Stored as users/{uid}/fcmTokens/{token} with { createdAt, ua }.
+// Doc ID is the token itself so duplicates are dedup'd automatically.
+
+export async function saveFcmToken(uid: string, token: string) {
+  await setDoc(
+    doc(getDb(), 'users', uid, 'fcmTokens', token),
+    {
+      createdAt: serverTimestamp(),
+      ua: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    },
+    { merge: true }
+  );
+}
+
+export async function deleteFcmToken(uid: string, token: string) {
+  await deleteDoc(doc(getDb(), 'users', uid, 'fcmTokens', token));
+}
+
+// ── Fire-and-forget variants ──
+// Each returns { id, promise } so the caller can navigate immediately and
+// just attach .catch() for error toasts. Firestore's persistent local cache
+// ensures the data is visible to listeners as soon as the local write commits.
+
+export function createTripLocal(data: {
+  name: string;
+  destination: string;
+  startDate: string;
+  endDate: string;
+  currency: string;
+  adminUid: string;
+}): { id: string; promise: Promise<void> } {
+  const ref = doc(collection(getDb(), 'trips'));
+  const promise = setDoc(ref, {
+    ...data,
+    inviteCode: generateInviteCode(),
+    memberUids: [data.adminUid],
+    createdAt: serverTimestamp(),
+  });
+  return { id: ref.id, promise };
+}
+
+export function addExpenseLocal(
+  tripId: string,
+  data: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>
+): { id: string; promise: Promise<void> } {
+  const ref = doc(collection(getDb(), 'trips', tripId, 'expenses'));
+  const promise = setDoc(ref, {
+    ...data,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return { id: ref.id, promise };
+}
+
+export function addActivityLocal(
+  tripId: string,
+  data: Omit<Activity, 'id' | 'createdAt'>
+): { id: string; promise: Promise<void> } {
+  const ref = doc(collection(getDb(), 'trips', tripId, 'activities'));
+  const promise = setDoc(ref, {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+  return { id: ref.id, promise };
+}
+
+export function addSettlementLocal(
+  tripId: string,
+  data: Omit<Settlement, 'id' | 'createdAt'>
+): { id: string; promise: Promise<void> } {
+  const ref = doc(collection(getDb(), 'trips', tripId, 'settlements'));
+  const promise = setDoc(ref, {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+  return { id: ref.id, promise };
+}
+
+export function addAdvanceLocal(
+  tripId: string,
+  data: Omit<Advance, 'id' | 'createdAt'>
+): { id: string; promise: Promise<void> } {
+  const ref = doc(collection(getDb(), 'trips', tripId, 'advances'));
+  const promise = setDoc(ref, {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+  return { id: ref.id, promise };
 }
 
 // ── Helpers ──

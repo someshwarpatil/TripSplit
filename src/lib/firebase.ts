@@ -1,6 +1,13 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  Firestore,
+} from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
@@ -12,8 +19,9 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp;
-let auth: Auth;
-let db: Firestore;
+let authInstance: Auth;
+let dbInstance: Firestore;
+let storageInstance: FirebaseStorage;
 
 function getFirebaseApp() {
   if (!app) {
@@ -23,18 +31,34 @@ function getFirebaseApp() {
 }
 
 function getFirebaseAuth() {
-  if (!auth) {
-    auth = getAuth(getFirebaseApp());
+  if (!authInstance) {
+    authInstance = getAuth(getFirebaseApp());
   }
-  return auth;
+  return authInstance;
 }
 
 function getFirebaseDb() {
-  if (!db) {
-    db = getFirestore(getFirebaseApp());
+  if (!dbInstance) {
+    try {
+      dbInstance = initializeFirestore(getFirebaseApp(), {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      });
+    } catch {
+      // Fallback if persistence fails (private browsing, already initialized, etc.)
+      dbInstance = getFirestore(getFirebaseApp());
+    }
   }
-  return db;
+  return dbInstance;
 }
 
-export { getFirebaseAuth as auth, getFirebaseDb as db };
+function getFirebaseStorage() {
+  if (!storageInstance) {
+    storageInstance = getStorage(getFirebaseApp());
+  }
+  return storageInstance;
+}
+
+export { getFirebaseAuth as auth, getFirebaseDb as db, getFirebaseStorage as storage };
 export default getFirebaseApp;

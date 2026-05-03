@@ -6,6 +6,12 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+
+      // FCM tokens — only the owning user reads/writes their own tokens.
+      // Cloud Functions use the admin SDK and bypass these rules.
+      match /fcmTokens/{token} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Trips collection
@@ -42,6 +48,15 @@ service cloud.firestore {
       match /settlements/{settlementId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null;
+      }
+
+      // Advances subcollection (admin-only write)
+      match /advances/{advanceId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null &&
+          get(/databases/$(database)/documents/trips/$(tripId)).data.adminUid == request.auth.uid;
+        allow delete: if request.auth != null &&
+          get(/databases/$(database)/documents/trips/$(tripId)).data.adminUid == request.auth.uid;
       }
     }
 

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Trip, Expense, Activity, Settlement } from '@/types';
+import { Trip, Expense, Activity, Settlement, Advance } from '@/types';
 import {
   subscribeToTrip,
   subscribeToExpenses,
   subscribeToActivities,
   subscribeToSettlements,
+  subscribeToAdvances,
   getUserDocs,
 } from '@/lib/firestore';
 
@@ -68,6 +69,21 @@ export function useSettlements(tripId: string) {
   }, [tripId]);
 
   return { settlements, loading };
+}
+
+export function useAdvances(tripId: string) {
+  const [advances, setAdvances] = useState<Advance[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = subscribeToAdvances(tripId, (a) => {
+      setAdvances(a);
+      setLoading(false);
+    });
+    return unsub;
+  }, [tripId]);
+
+  return { advances, loading };
 }
 
 export function useMembers(memberUids: string[]) {

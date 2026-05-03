@@ -25,15 +25,15 @@ export default function Tabs({ tabs, defaultTab, onChange, children }: TabsProps
 
   return (
     <div>
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+      <div className="flex gap-1 bg-[var(--color-tab-bg)] p-1 rounded-xl">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => handleTabChange(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
               activeTab === tab.id
-                ? 'bg-white text-[#E63946] shadow-sm'
-                : 'text-[#6B7280] hover:text-[#1A1A2E]'
+                ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
             }`}
           >
             {tab.icon}
@@ -41,7 +41,7 @@ export default function Tabs({ tabs, defaultTab, onChange, children }: TabsProps
           </button>
         ))}
       </div>
-      <div className="mt-4">{children(activeTab)}</div>
+      <div key={activeTab} className="mt-4 animate-fade-in">{children(activeTab)}</div>
     </div>
   );
 }

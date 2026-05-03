@@ -1,16 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Crown, UserMinus, Share2 } from 'lucide-react';
+import { Copy, Crown, UserMinus, Share2, QrCode } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Avatar from '@/components/ui/Avatar';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import { Trip, Expense } from '@/types';
-import { removeMember, addActivity } from '@/lib/firestore';
+import { removeMember, addActivityLocal } from '@/lib/firestore';
 import { getUserTotalSpend } from '@/utils/balance';
 import { formatCurrency } from '@/utils/format';
+import QRCodeModal from '@/components/trip/QRCodeModal';
 import { toast } from 'sonner';
 
 interface Props {
@@ -24,26 +25,23 @@ interface Props {
 
 export default function MembersTab({ tripId, trip, members, expenses, currentUid, isAdmin }: Props) {
   const [removingMember, setRemovingMember] = useState<string | null>(null);
-  const [removing, setRemoving] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
-  const handleRemove = async () => {
+  const handleRemove = () => {
     if (!removingMember) return;
-    setRemoving(true);
-    try {
-      const memberName = members.find((m) => m.uid === removingMember)?.displayName || 'A member';
-      await removeMember(tripId, removingMember);
-      await addActivity(tripId, {
-        type: 'member_removed',
-        actorUid: currentUid,
-        description: `${memberName} was removed from the trip`,
-      });
-      toast.success('Member removed');
-      setRemovingMember(null);
-    } catch {
+    const memberName = members.find((m) => m.uid === removingMember)?.displayName || 'A member';
+    const target = removingMember;
+    removeMember(tripId, target).catch((err) => {
+      console.error('Member remove failed', err);
       toast.error('Failed to remove member');
-    } finally {
-      setRemoving(false);
-    }
+    });
+    addActivityLocal(tripId, {
+      type: 'member_removed',
+      actorUid: currentUid,
+      description: `${memberName} was removed from the trip`,
+    }).promise.catch((err) => console.error('Activity log failed', err));
+    toast.success('Member removed');
+    setRemovingMember(null);
   };
 
   const copyInviteCode = () => {
@@ -52,7 +50,7 @@ export default function MembersTab({ tripId, trip, members, expenses, currentUid
   };
 
   const shareTrip = () => {
-    const url = `${window.location.origin}/join/${trip.inviteCode}`;
+    const url = `${window.location.origin}/join?id=${trip.inviteCode}`;
     if (navigator.share) {
       navigator.share({ title: `Join ${trip.name}`, text: `Join my trip on TripSplit!`, url });
     } else {
@@ -64,49 +62,47 @@ export default function MembersTab({ tripId, trip, members, expenses, currentUid
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <Button variant="secondary" size="sm" onClick={copyInviteCode}>
-          <Copy className="w-3.5 h-3.5" />
+        <Button variant="secondary" size="sm" onClick={copyInviteCode} icon={<Copy className="w-3.5 h-3.5" />}>
           {trip.inviteCode}
         </Button>
-        <Button variant="outline" size="sm" onClick={shareTrip}>
-          <Share2 className="w-3.5 h-3.5" />
+        <Button variant="outline" size="sm" onClick={shareTrip} icon={<Share2 className="w-3.5 h-3.5" />}>
           Share
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowQR(true)} icon={<QrCode className="w-3.5 h-3.5" />}>
+          QR
         </Button>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 stagger">
         {members.map((member) => {
           const spent = getUserTotalSpend(member.uid, expenses);
           const isMemberAdmin = member.uid === trip.adminUid;
           return (
-            <Card key={member.uid} className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+            <Card key={member.uid} padding="sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
                   <Avatar name={member.displayName} photoURL={member.photoURL} />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-[#1A1A2E]">{member.displayName}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-[var(--color-text)] truncate">{member.displayName}</span>
                       {isMemberAdmin && (
-                        <Badge>
-                          <Crown className="w-3 h-3 mr-1" />
-                          Admin
-                        </Badge>
+                        <Badge icon={<Crown className="w-3 h-3" />}>Admin</Badge>
                       )}
                       {member.uid === currentUid && (
-                        <span className="text-xs text-[#6B7280]">(you)</span>
+                        <span className="text-xs text-[var(--color-text-secondary)]">(you)</span>
                       )}
                     </div>
-                    <p className="text-xs text-[#6B7280]">{member.email}</p>
+                    <p className="text-xs text-[var(--color-text-secondary)] truncate">{member.email}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-[#1A1A2E]">
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm font-medium text-[var(--color-text)] tnum">
                     {formatCurrency(spent, trip.currency)}
                   </span>
                   {isAdmin && !isMemberAdmin && (
                     <button
                       onClick={() => setRemovingMember(member.uid)}
-                      className="p-1.5 rounded-lg hover:bg-red-50 text-[#6B7280] hover:text-[#EF4444] transition-colors"
+                      className="p-2 rounded-lg hover:bg-[var(--color-primary-light)] text-[var(--color-text-secondary)] hover:text-[var(--color-error)] t-fast"
                     >
                       <UserMinus className="w-4 h-4" />
                     </button>
@@ -124,7 +120,7 @@ export default function MembersTab({ tripId, trip, members, expenses, currentUid
         title="Remove Member"
       >
         <div className="space-y-4">
-          <p className="text-sm text-[#6B7280]">
+          <p className="text-sm text-[var(--color-text-secondary)]">
             Are you sure you want to remove{' '}
             <strong>{members.find((m) => m.uid === removingMember)?.displayName}</strong> from
             this trip? Their expenses will remain.
@@ -133,11 +129,18 @@ export default function MembersTab({ tripId, trip, members, expenses, currentUid
             <Button variant="outline" onClick={() => setRemovingMember(null)} className="flex-1">
               Cancel
             </Button>
-            <Button variant="danger" onClick={handleRemove} loading={removing} className="flex-1">
+            <Button variant="danger" onClick={handleRemove} className="flex-1">
               Remove
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal isOpen={showQR} onClose={() => setShowQR(false)} title="Invite QR Code">
+        <QRCodeModal
+          url={`${typeof window !== 'undefined' ? window.location.origin : ''}/join?id=${trip.inviteCode}`}
+          tripName={trip.name}
+        />
       </Modal>
     </div>
   );

@@ -3,6 +3,7 @@ export interface User {
   displayName: string;
   email: string;
   photoURL: string | null;
+  upiId?: string;
   createdAt: Date;
 }
 
@@ -17,9 +18,17 @@ export interface Trip {
   inviteCode: string;
   createdAt: Date;
   memberUids: string[];
+  coverImageUrl?: string;
 }
 
 export type SplitType = 'equal' | 'custom' | 'percentage';
+export type ExpenseCategory = 'food' | 'transport' | 'accommodation' | 'activities' | 'shopping' | 'other';
+
+export interface ExpenseLocation {
+  name: string;
+  lat: number;
+  lng: number;
+}
 
 export interface Expense {
   id: string;
@@ -30,8 +39,20 @@ export interface Expense {
   createdByUid: string;
   splitType: SplitType;
   splits: Record<string, number>;
+  category?: ExpenseCategory;
+  location?: ExpenseLocation;
+  receiptUrl?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ScannedExpense {
+  description: string;
+  amount: number;
+  date?: string;
+  category?: ExpenseCategory;
+  merchant?: string;
+  sourceImageIndex: number;
 }
 
 export type ActivityType =
@@ -58,6 +79,15 @@ export interface Settlement {
   fromUid: string;
   toUid: string;
   amount: number;
+  createdAt: Date;
+}
+
+export interface Advance {
+  id: string;
+  memberUid: string;
+  amount: number;
+  note?: string;
+  addedByUid: string;
   createdAt: Date;
 }
 

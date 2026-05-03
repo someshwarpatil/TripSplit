@@ -1,13 +1,20 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { OfflineProvider } from '@/context/OfflineContext';
 import { Toaster } from 'sonner';
+import OfflineBanner from '@/components/layout/OfflineBanner';
 import PWARegister from '@/components/PWARegister';
 
-const inter = Inter({
-  variable: '--font-inter',
+const geistSans = Geist({
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
+});
+
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
   subsets: ['latin'],
 });
 
@@ -46,26 +53,29 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${inter.variable} font-sans antialiased transition-colors duration-300`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased transition-colors duration-300`}
         style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
       >
         <ThemeProvider>
-          <AuthProvider>
-            {children}
-            <Toaster
-              position="top-center"
-              toastOptions={{
-                style: {
-                  borderRadius: '12px',
-                  padding: '12px 16px',
-                  background: 'var(--color-surface)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-border)',
-                },
-              }}
-            />
-            <PWARegister />
-          </AuthProvider>
+          <OfflineProvider>
+            <AuthProvider>
+              <OfflineBanner />
+              {children}
+              <Toaster
+                position="top-center"
+                toastOptions={{
+                  style: {
+                    borderRadius: '12px',
+                    padding: '12px 16px',
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text)',
+                    border: '1px solid var(--color-border)',
+                  },
+                }}
+              />
+              <PWARegister />
+            </AuthProvider>
+          </OfflineProvider>
         </ThemeProvider>
       </body>
     </html>

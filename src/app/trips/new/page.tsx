@@ -7,8 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/layout/Navbar';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { createTrip } from '@/lib/firestore';
-import { addActivity } from '@/lib/firestore';
+import { createTripLocal, addActivityLocal } from '@/lib/firestore';
 import { toast } from 'sonner';
 
 const currencies = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD'];
@@ -21,7 +20,6 @@ export default function NewTripPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currency, setCurrency] = useState('USD');
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
@@ -29,47 +27,44 @@ export default function NewTripPage() {
 
   if (authLoading || !user) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const tripId = await createTrip({
-        name,
-        destination,
-        startDate,
-        endDate,
-        currency,
-        adminUid: user.uid,
-      });
-      await addActivity(tripId, {
-        type: 'trip_created',
-        actorUid: user.uid,
-        description: `${user.displayName} created the trip "${name}"`,
-      });
-      toast.success('Trip created!');
-      router.push(`/trips/${tripId}`);
-    } catch {
+    const { id: tripId, promise } = createTripLocal({
+      name,
+      destination,
+      startDate,
+      endDate,
+      currency,
+      adminUid: user.uid,
+    });
+    promise.catch((err) => {
+      console.error('Trip create failed', err);
       toast.error('Failed to create trip');
-    } finally {
-      setLoading(false);
-    }
+    });
+    addActivityLocal(tripId, {
+      type: 'trip_created',
+      actorUid: user.uid,
+      description: `${user.displayName} created the trip "${name}"`,
+    }).promise.catch((err) => console.error('Activity log failed', err));
+    toast.success('Trip created!');
+    router.push(`/trips/${tripId}`);
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div className="min-h-screen bg-[var(--color-bg)]">
       <Navbar />
-      <main className="max-w-lg mx-auto px-4 py-8">
+      <main className="max-w-lg mx-auto px-4 py-6 sm:py-8">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1 text-[#6B7280] text-sm mb-6 hover:text-[#1A1A2E] transition-colors"
+          className="flex items-center gap-1 text-[var(--color-text-secondary)] text-sm mb-6 hover:text-[var(--color-text)] transition-colors p-1 -ml-1 rounded-lg"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
 
-        <h1 className="text-2xl font-bold text-[#1A1A2E] mb-6">Create a New Trip</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-[var(--color-text)] mb-6">Create a New Trip</h1>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm p-5 sm:p-6 space-y-5">
           <Input
             label="Trip Name"
             placeholder="e.g., Summer Road Trip"
@@ -83,7 +78,7 @@ export default function NewTripPage() {
             value={destination}
             onChange={(e) => setDestination(e.target.value)}
           />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <Input
               label="Start Date"
               type="date"
@@ -100,20 +95,20 @@ export default function NewTripPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-[#1A1A2E]">
+            <label className="block text-sm font-medium text-[var(--color-text)]">
               Currency
             </label>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-[#1A1A2E] focus:outline-none focus:ring-2 focus:ring-[#E63946] focus:border-transparent transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-input-bg)] text-[var(--color-text)] text-base focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition-all"
             >
               {currencies.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
-          <Button type="submit" loading={loading} className="w-full">
+          <Button type="submit" className="w-full">
             Create Trip
           </Button>
         </form>

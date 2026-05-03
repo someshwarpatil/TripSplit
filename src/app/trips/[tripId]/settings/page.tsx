@@ -9,7 +9,7 @@ import Navbar from '@/components/layout/Navbar';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Modal from '@/components/ui/Modal';
-import { updateTrip, deleteTrip, regenerateInviteCode, addActivity } from '@/lib/firestore';
+import { updateTrip, deleteTrip, regenerateInviteCode, addActivityLocal } from '@/lib/firestore';
 import { toast } from 'sonner';
 
 export default function TripSettingsPage() {
@@ -23,9 +23,8 @@ export default function TripSettingsPage() {
   const [destination, setDestination] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState('');
   const [showDelete, setShowDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
@@ -38,6 +37,7 @@ export default function TripSettingsPage() {
       setDestination(trip.destination);
       setStartDate(trip.startDate);
       setEndDate(trip.endDate);
+      setCoverImageUrl(trip.coverImageUrl || '');
     }
   }, [trip]);
 
@@ -47,23 +47,25 @@ export default function TripSettingsPage() {
     return null;
   }
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    try {
-      await updateTrip(tripId, { name, destination, startDate, endDate });
-      await addActivity(tripId, {
-        type: 'trip_updated',
-        actorUid: user.uid,
-        description: `${user.displayName} updated trip settings`,
-      });
-      toast.success('Trip updated!');
-      router.push(`/trips/${tripId}`);
-    } catch {
+    updateTrip(tripId, {
+      name,
+      destination,
+      startDate,
+      endDate,
+      coverImageUrl: coverImageUrl.trim() || '',
+    }).catch((err) => {
+      console.error('Trip update failed', err);
       toast.error('Failed to update trip');
-    } finally {
-      setSaving(false);
-    }
+    });
+    addActivityLocal(tripId, {
+      type: 'trip_updated',
+      actorUid: user.uid,
+      description: `${user.displayName} updated trip settings`,
+    }).promise.catch((err) => console.error('Activity log failed', err));
+    toast.success('Trip updated!');
+    router.push(`/trips/${tripId}`);
   };
 
   const handleRegenerate = async () => {
@@ -78,59 +80,91 @@ export default function TripSettingsPage() {
     }
   };
 
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await deleteTrip(tripId);
-      toast.success('Trip deleted');
-      router.push('/dashboard');
-    } catch {
+  const handleDelete = () => {
+    deleteTrip(tripId).catch((err) => {
+      console.error('Trip delete failed', err);
       toast.error('Failed to delete trip');
-    } finally {
-      setDeleting(false);
-    }
+    });
+    toast.success('Trip deleted');
+    router.push('/dashboard');
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div className="min-h-screen bg-[var(--color-bg)]">
       <Navbar />
-      <main className="max-w-lg mx-auto px-4 py-8">
+      <main className="max-w-lg mx-auto px-4 py-6 sm:py-8">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1 text-[#6B7280] text-sm mb-6 hover:text-[#1A1A2E] transition-colors"
+          className="flex items-center gap-1 text-[var(--color-text-secondary)] text-sm mb-6 hover:text-[var(--color-text)] transition-colors p-1 -ml-1 rounded-lg"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
 
-        <h1 className="text-2xl font-bold text-[#1A1A2E] mb-6">Trip Settings</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-[var(--color-text)] mb-6">Trip Settings</h1>
 
-        <form onSubmit={handleSave} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+        <form onSubmit={handleSave} className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm p-5 sm:p-6 space-y-5">
           <Input label="Trip Name" value={name} onChange={(e) => setName(e.target.value)} required />
           <Input label="Destination" value={destination} onChange={(e) => setDestination(e.target.value)} />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <Input label="Start Date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
             <Input label="End Date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
           </div>
-          <Button type="submit" loading={saving} className="w-full">Save Changes</Button>
+
+          <div className="space-y-2">
+            <div
+              className="relative w-full h-28 rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-border)]"
+              style={{
+                backgroundImage: coverImageUrl
+                  ? `url(${coverImageUrl})`
+                  : 'linear-gradient(135deg, #E63946 0%, #F4A261 100%)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              {!coverImageUrl && (
+                <div className="absolute inset-0 flex items-center justify-center text-white/90 text-xs font-medium">
+                  Preview · default gradient
+                </div>
+              )}
+            </div>
+            <Input
+              label="Cover Image URL"
+              placeholder="https://images.unsplash.com/…"
+              value={coverImageUrl}
+              onChange={(e) => setCoverImageUrl(e.target.value)}
+              hint="Paste any public image URL. Leave empty to use the default gradient."
+            />
+            {coverImageUrl && (
+              <button
+                type="button"
+                onClick={() => setCoverImageUrl('')}
+                className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-error)] t-fast"
+              >
+                Remove cover image
+              </button>
+            )}
+          </div>
+
+          <Button type="submit" className="w-full">Save Changes</Button>
         </form>
 
-        <div className="mt-6 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium text-[#1A1A2E]">Invite Code</h3>
-              <p className="text-sm text-[#6B7280]">Current: <span className="font-mono font-medium">{trip.inviteCode}</span></p>
+        <div className="mt-6 bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm p-5 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-medium text-[var(--color-text)]">Invite Code</h3>
+              <p className="text-sm text-[var(--color-text-secondary)]">Current: <span className="font-mono font-medium">{trip.inviteCode}</span></p>
             </div>
             <Button variant="outline" size="sm" onClick={handleRegenerate} loading={regenerating}>
               <RefreshCw className="w-3.5 h-3.5" />
-              Regenerate
+              <span className="hidden sm:inline">Regenerate</span>
             </Button>
           </div>
         </div>
 
-        <div className="mt-6 bg-white rounded-2xl border border-red-100 shadow-sm p-6">
-          <h3 className="font-medium text-[#EF4444]">Danger Zone</h3>
-          <p className="text-sm text-[#6B7280] mt-1">Permanently delete this trip and all its data.</p>
+        <div className="mt-6 bg-[var(--color-surface)] rounded-2xl border border-[var(--color-error)]/20 shadow-sm p-5 sm:p-6">
+          <h3 className="font-medium text-[var(--color-error)]">Danger Zone</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">Permanently delete this trip and all its data.</p>
           <Button variant="danger" size="sm" onClick={() => setShowDelete(true)} className="mt-3">
             <Trash2 className="w-3.5 h-3.5" />
             Delete Trip
@@ -139,12 +173,12 @@ export default function TripSettingsPage() {
 
         <Modal isOpen={showDelete} onClose={() => setShowDelete(false)} title="Delete Trip">
           <div className="space-y-4">
-            <p className="text-sm text-[#6B7280]">
+            <p className="text-sm text-[var(--color-text-secondary)]">
               Are you sure you want to delete <strong>{trip.name}</strong>? All expenses, settlements, and data will be permanently deleted.
             </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setShowDelete(false)} className="flex-1">Cancel</Button>
-              <Button variant="danger" onClick={handleDelete} loading={deleting} className="flex-1">Delete</Button>
+              <Button variant="danger" onClick={handleDelete} className="flex-1">Delete</Button>
             </div>
           </div>
         </Modal>

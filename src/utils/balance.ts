@@ -1,9 +1,11 @@
-import { Expense, Settlement, DebtSimplified } from '@/types';
+import { Expense, Settlement, Advance, DebtSimplified } from '@/types';
 
 export function calculateBalances(
   expenses: Expense[],
   settlements: Settlement[],
-  memberUids: string[]
+  memberUids: string[],
+  advances: Advance[] = [],
+  adminUid?: string
 ): Map<string, number> {
   const balances = new Map<string, number>();
   memberUids.forEach((uid) => balances.set(uid, 0));
@@ -28,7 +30,71 @@ export function calculateBalances(
     );
   }
 
+  // Advances: member gave admin cash upfront. Admin owes member that amount
+  // (until offset by member's share in admin-paid expenses, which already
+  // appears as member-owes-admin pairwise). Net balance effect is identical
+  // to a settlement from member to admin.
+  if (adminUid) {
+    for (const adv of advances) {
+      balances.set(adv.memberUid, (balances.get(adv.memberUid) || 0) + adv.amount);
+      balances.set(adminUid, (balances.get(adminUid) || 0) - adv.amount);
+    }
+  }
+
   return balances;
+}
+
+// Computes pairwise debts without cross-pair consolidation, so an advance
+// between member<->admin never reduces a member's debt to someone else.
+export function computePairwiseDebts(
+  expenses: Expense[],
+  settlements: Settlement[],
+  advances: Advance[],
+  adminUid: string | null
+): DebtSimplified[] {
+  const pairwise = new Map<string, number>();
+
+  const addPair = (from: string, to: string, amount: number) => {
+    if (!from || !to || from === to || amount === 0) return;
+    const fwdKey = `${from}|${to}`;
+    const bwdKey = `${to}|${from}`;
+    const fwd = pairwise.get(fwdKey) || 0;
+    const bwd = pairwise.get(bwdKey) || 0;
+    const net = fwd - bwd + amount;
+    pairwise.delete(fwdKey);
+    pairwise.delete(bwdKey);
+    if (net > 0.01) pairwise.set(fwdKey, net);
+    else if (net < -0.01) pairwise.set(bwdKey, -net);
+  };
+
+  // Advances: admin holds member's cash → admin owes member
+  if (adminUid) {
+    for (const adv of advances) {
+      addPair(adminUid, adv.memberUid, adv.amount);
+    }
+  }
+
+  // Expenses: each non-payer's share is a debt to the payer
+  for (const exp of expenses) {
+    for (const [uid, share] of Object.entries(exp.splits)) {
+      if (uid !== exp.paidByUid) {
+        addPair(uid, exp.paidByUid, share);
+      }
+    }
+  }
+
+  // Settlements: "fromUid paid toUid" reduces fromUid→toUid debt
+  for (const s of settlements) {
+    addPair(s.toUid, s.fromUid, s.amount);
+  }
+
+  const debts: DebtSimplified[] = [];
+  pairwise.forEach((amount, key) => {
+    const [from, to] = key.split('|');
+    debts.push({ from, to, amount: Math.round(amount * 100) / 100 });
+  });
+  debts.sort((a, b) => b.amount - a.amount);
+  return debts;
 }
 
 export function simplifyDebts(balances: Map<string, number>): DebtSimplified[] {
@@ -93,9 +159,11 @@ export function getUserBalance(
   uid: string,
   expenses: Expense[],
   settlements: Settlement[],
-  memberUids: string[]
+  memberUids: string[],
+  advances: Advance[] = [],
+  adminUid?: string
 ): number {
-  const balances = calculateBalances(expenses, settlements, memberUids);
+  const balances = calculateBalances(expenses, settlements, memberUids, advances, adminUid);
   return balances.get(uid) || 0;
 }
 

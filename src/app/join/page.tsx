@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, MapPin } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/layout/Navbar';
@@ -12,29 +12,27 @@ import { getTripByInviteCode, joinTrip, addActivity } from '@/lib/firestore';
 import { Trip } from '@/types';
 import { toast } from 'sonner';
 
-export default function JoinPage() {
+function JoinPageContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryCode = searchParams.get('id');
   const [code, setCode] = useState('');
   const [trip, setTrip] = useState<Trip | null>(null);
   const [searching, setSearching] = useState(false);
   const [joining, setJoining] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) router.push('/login');
-  }, [user, authLoading, router]);
+    if (!authLoading && !user) router.push('/login?redirect=/join' + (queryCode ? `?id=${queryCode}` : ''));
+  }, [user, authLoading, router, queryCode]);
 
-  if (authLoading || !user) return null;
-
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (code.length < 6) { toast.error('Enter a valid 6-character code'); return; }
+  const searchByCode = useCallback(async (searchCode: string) => {
     setSearching(true);
     try {
-      const found = await getTripByInviteCode(code.toUpperCase());
+      const found = await getTripByInviteCode(searchCode.toUpperCase());
       if (found) {
         setTrip(found);
-        if (found.memberUids.includes(user.uid)) {
+        if (user && found.memberUids.includes(user.uid)) {
           toast.info('You are already a member of this trip');
         }
       } else {
@@ -46,6 +44,21 @@ export default function JoinPage() {
     } finally {
       setSearching(false);
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (queryCode && user) {
+      setCode(queryCode.toUpperCase());
+      searchByCode(queryCode);
+    }
+  }, [queryCode, user, searchByCode]);
+
+  if (authLoading || !user) return null;
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (code.length < 6) { toast.error('Enter a valid 6-character code'); return; }
+    await searchByCode(code);
   };
 
   const handleJoin = async () => {
@@ -68,20 +81,20 @@ export default function JoinPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div className="min-h-screen bg-[var(--color-bg)]">
       <Navbar />
-      <main className="max-w-lg mx-auto px-4 py-8">
+      <main className="max-w-lg mx-auto px-4 py-6 sm:py-8">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1 text-[#6B7280] text-sm mb-6 hover:text-[#1A1A2E] transition-colors"
+          className="flex items-center gap-1 text-[var(--color-text-secondary)] text-sm mb-6 hover:text-[var(--color-text)] transition-colors p-1 -ml-1 rounded-lg"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
 
-        <h1 className="text-2xl font-bold text-[#1A1A2E] mb-6">Join a Trip</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-[var(--color-text)] mb-6">Join a Trip</h1>
 
-        <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+        <form onSubmit={handleSearch} className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm p-5 sm:p-6 space-y-4">
           <Input
             label="Invite Code"
             placeholder="e.g., ABC123"
@@ -96,15 +109,15 @@ export default function JoinPage() {
         </form>
 
         {trip && (
-          <Card className="mt-6 p-6">
-            <h2 className="text-lg font-semibold text-[#1A1A2E]">{trip.name}</h2>
+          <Card className="mt-6 p-5 sm:p-6">
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">{trip.name}</h2>
             {trip.destination && (
-              <p className="flex items-center gap-1 text-sm text-[#6B7280] mt-1">
+              <p className="flex items-center gap-1 text-sm text-[var(--color-text-secondary)] mt-1">
                 <MapPin className="w-3.5 h-3.5" />
                 {trip.destination}
               </p>
             )}
-            <p className="flex items-center gap-1 text-sm text-[#6B7280] mt-1">
+            <p className="flex items-center gap-1 text-sm text-[var(--color-text-secondary)] mt-1">
               <Users className="w-3.5 h-3.5" />
               {trip.memberUids.length} members
             </p>
@@ -129,5 +142,13 @@ export default function JoinPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense>
+      <JoinPageContent />
+    </Suspense>
   );
 }
