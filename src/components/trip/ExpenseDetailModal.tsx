@@ -62,14 +62,16 @@ export default function ExpenseDetailModal({ expense, members, currency, tripId 
             <MapPin className="w-4 h-4" />
             {expense.location.name}
           </div>
-          {expense.location.lat !== 0 && expense.location.lng !== 0 && (
+          {expense.location.lat !== 0 && expense.location.lng !== 0 && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
             <div className="rounded-xl overflow-hidden border border-[var(--color-border)]">
               <iframe
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${expense.location.lng - 0.005},${expense.location.lat - 0.003},${expense.location.lng + 0.005},${expense.location.lat + 0.003}&layer=mapnik&marker=${expense.location.lat},${expense.location.lng}`}
+                src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${expense.location.lat},${expense.location.lng}&zoom=16`}
                 width="100%"
                 height="150"
                 style={{ border: 0 }}
                 loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
               />
             </div>
           )}
